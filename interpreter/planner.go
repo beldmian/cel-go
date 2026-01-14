@@ -59,6 +59,8 @@ type planner struct {
 	typeMap     map[int64]*types.Type
 	decorators  []InterpretableDecorator
 	observers   []StatefulObserver
+	cache       InterpretableCache
+	pool        *PlannerPool
 }
 
 // Plan implements the interpretablePlanner interface. This implementation of the Plan method also
@@ -78,25 +80,46 @@ func (p *planner) Plan(expr ast.Expr) (Interpretable, error) {
 }
 
 func (p *planner) plan(expr ast.Expr) (Interpretable, error) {
+	// Check cache first if enabled
+	// Use structural hash instead of expression ID for cross-program reuse
+	var cacheKey int64
+	if p.cache != nil {
+		cacheKey = int64(HashExpr(expr))
+		if cached, ok := p.cache.Get(cacheKey); ok {
+			return cached, nil
+		}
+	}
+
+	var i Interpretable
+	var err error
+
 	switch expr.Kind() {
 	case ast.CallKind:
-		return p.decorate(p.planCall(expr))
+		i, err = p.decorate(p.planCall(expr))
 	case ast.IdentKind:
-		return p.decorate(p.planIdent(expr))
+		i, err = p.decorate(p.planIdent(expr))
 	case ast.LiteralKind:
-		return p.decorate(p.planConst(expr))
+		i, err = p.decorate(p.planConst(expr))
 	case ast.SelectKind:
-		return p.decorate(p.planSelect(expr))
+		i, err = p.decorate(p.planSelect(expr))
 	case ast.ListKind:
-		return p.decorate(p.planCreateList(expr))
+		i, err = p.decorate(p.planCreateList(expr))
 	case ast.MapKind:
-		return p.decorate(p.planCreateMap(expr))
+		i, err = p.decorate(p.planCreateMap(expr))
 	case ast.StructKind:
-		return p.decorate(p.planCreateStruct(expr))
+		i, err = p.decorate(p.planCreateStruct(expr))
 	case ast.ComprehensionKind:
-		return p.decorate(p.planComprehension(expr))
+		i, err = p.decorate(p.planComprehension(expr))
+	default:
+		return nil, fmt.Errorf("unsupported expr: %v", expr)
 	}
-	return nil, fmt.Errorf("unsupported expr: %v", expr)
+
+	// Store in cache if enabled and successful
+	if err == nil && p.cache != nil {
+		p.cache.Put(cacheKey, i)
+	}
+
+	return i, err
 }
 
 // decorate applies the InterpretableDecorator functions to the given Interpretable.

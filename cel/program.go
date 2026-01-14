@@ -244,6 +244,15 @@ func newProgram(e *Env, a *ast.AST, opts []ProgramOption) (Program, error) {
 		plannerOptions = append(plannerOptions, interpreter.CompileRegexConstants(p.regexOptimizations...))
 	}
 
+	// Enable interpretable caching if configured on the environment
+	if p.Env.interpCache != nil {
+		plannerOptions = append(plannerOptions, interpreter.EnableInterpretableCacheWithImpl(p.Env.interpCache))
+	}
+	// Enable planner pooling if configured on the environment
+	if p.Env.plannerPool != nil {
+		plannerOptions = append(plannerOptions, interpreter.EnablePlannerPoolWithImpl(p.Env.plannerPool))
+	}
+
 	// Enable exhaustive eval, state tracking and cost tracking last since they require a factory.
 	if p.evalOpts&(OptExhaustiveEval|OptTrackState|OptTrackCost) != 0 {
 		costOptCount := len(p.costOptions)

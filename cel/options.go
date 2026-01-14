@@ -874,6 +874,78 @@ func EnableHiddenAccumulatorName(enabled bool) EnvOption {
 	}
 }
 
+// EnableInterpretableCache enables caching of Interpretable objects across multiple Program
+// creations from the same environment. This can significantly improve performance when creating
+// many programs with shared sub-expressions.
+//
+// The cache stores intermediate interpretable objects keyed by expression ID. When the same
+// sub-expression appears in multiple programs (or multiple times within the same program), the
+// cached interpretable is reused instead of re-planning.
+//
+// Benefits:
+//   - Reduces planning time for programs with common sub-expressions
+//   - Especially effective when creating multiple programs from the same environment
+//   - Thread-safe and can be used concurrently
+//
+// Considerations:
+//   - Cache persists for the lifetime of the environment
+//   - Memory usage scales with the number of unique sub-expressions cached
+//   - Cache entries are never evicted (use a custom cache implementation for eviction policies)
+//
+// Example usage:
+//
+//	env, _ := cel.NewEnv(cel.EnableInterpretableCache())
+//	// All programs created from this env will share the interpretable cache
+//	prog1, _ := env.Program(ast1)
+//	prog2, _ := env.Program(ast2) // May reuse cached interpretables from prog1
+func EnableInterpretableCache() EnvOption {
+	return func(e *Env) (*Env, error) {
+		e.interpCache = interpreter.NewInterpretableCache()
+		return e, nil
+	}
+}
+
+// EnableInterpretableCacheWithImpl enables caching with a custom InterpretableCache implementation.
+// This allows using application-specific cache implementations with custom eviction policies,
+// size limits, or other optimizations.
+//
+// The provided cache must be thread-safe as it will be accessed concurrently during program
+// creation from multiple goroutines.
+func EnableInterpretableCacheWithImpl(cache interpreter.InterpretableCache) EnvOption {
+	return func(e *Env) (*Env, error) {
+		if cache == nil {
+			return nil, fmt.Errorf("cache implementation cannot be nil")
+		}
+		e.interpCache = cache
+		return e, nil
+	}
+}
+
+// EnablePlannerPool enables object pooling for intermediate objects during program planning.
+// This reduces memory allocations and GC pressure when creating programs.
+//
+// The pool reuses slice and other intermediate objects across multiple planning operations.
+// This is particularly beneficial when creating many programs or when programs are created
+// frequently in performance-critical paths.
+//
+// Benefits:
+//   - Reduces memory allocations during planning
+//   - Decreases GC pressure
+//   - Can be combined with EnableInterpretableCache for maximum performance
+//
+// Example usage:
+//
+//	env, _ := cel.NewEnv(
+//	    cel.EnableInterpretableCache(),
+//	    cel.EnablePlannerPool(),
+//	)
+func EnablePlannerPool() EnvOption {
+	return func(e *Env) (*Env, error) {
+		e.plannerPool = interpreter.NewPlannerPool()
+		return e, nil
+	}
+}
+
 func maybeInteropProvider(provider any) (types.Provider, error) {
 	switch p := provider.(type) {
 	case types.Provider:

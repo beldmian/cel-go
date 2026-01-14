@@ -248,6 +248,43 @@ func CompileRegexConstants(regexOptimizations ...*RegexOptimization) PlannerOpti
 	return CustomDecorator(decRegexOptimizer(regexOptimizations...))
 }
 
+// EnableInterpretableCache enables caching of Interpretable objects during planning.
+// This can significantly improve performance when the same expressions are planned multiple
+// times with the same environment configuration.
+//
+// The cache is keyed by expression ID, which is stable across multiple planning operations
+// for the same AST. Cached interpretables are reused when the same expression ID is encountered.
+//
+// Note: The cache is maintained per planner instance. For optimal performance when evaluating
+// the same expression multiple times, create the program once and reuse it.
+func EnableInterpretableCache() PlannerOption {
+	return EnableInterpretableCacheWithImpl(NewInterpretableCache())
+}
+
+// EnableInterpretableCacheWithImpl enables caching with a custom cache implementation.
+// This allows using application-specific cache implementations with custom eviction policies,
+// size limits, or other optimizations.
+func EnableInterpretableCacheWithImpl(cache InterpretableCache) PlannerOption {
+	return func(p *planner) (*planner, error) {
+		p.cache = cache
+		return p, nil
+	}
+}
+
+// EnablePlannerPool enables object pooling for intermediate planner objects.
+// This reduces allocations during planning by reusing slice and other intermediate objects.
+func EnablePlannerPool() PlannerOption {
+	return EnablePlannerPoolWithImpl(NewPlannerPool())
+}
+
+// EnablePlannerPoolWithImpl enables object pooling with a custom pool implementation.
+func EnablePlannerPoolWithImpl(pool *PlannerPool) PlannerOption {
+	return func(p *planner) (*planner, error) {
+		p.pool = pool
+		return p, nil
+	}
+}
+
 type exprInterpreter struct {
 	dispatcher  Dispatcher
 	container   *containers.Container

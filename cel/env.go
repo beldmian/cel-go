@@ -159,6 +159,11 @@ type Env struct {
 
 	// Program options tied to the environment
 	progOpts []ProgramOption
+
+	// Interpretable cache shared across all programs created from this environment
+	interpCache interpreter.InterpretableCache
+	// Object pool for reducing allocations during planning
+	plannerPool *interpreter.PlannerPool
 }
 
 // ToConfig produces a YAML-serializable env.Config object from the given environment.
